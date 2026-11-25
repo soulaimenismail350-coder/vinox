@@ -288,21 +288,36 @@ function migrate(PDO $pdo): void
         }
     }
 
-    /* Retire the old default account.
+    /* Move the old owner login to vinox.
 
-       admin/admin was a guessable name and a guessable password on a panel
-       that launches processes - the worst pair there is. This renames it only
-       when the password is still the default one, so an account someone has
-       already secured is left alone, and it runs once. */
-    $stmt = $pdo->prepare('SELECT id, password_hash FROM users WHERE username = ?');
-    $stmt->execute(['admin']);
-    $old = $stmt->fetch();
-    if ($old && password_verify('admin', (string)$old['password_hash'])) {
-        $taken = $pdo->prepare('SELECT 1 FROM users WHERE username = ?');
-        $taken->execute(['karim']);
-        if (!$taken->fetch()) {
+       Installs shipped with karim/karimadm, and older ones with admin/admin.
+       Both become vinox with the requested password. The karim row is renamed
+       regardless of what its password was changed to - the panel has no other
+       way to apply a new login and password to an existing database - but only
+       if it is the owner account. An account already called vinox is never
+       overwritten: that would reset a real person's login on every request. */
+    $taken = $pdo->prepare('SELECT 1 FROM users WHERE username = ?');
+    $taken->execute(['vinox']);
+    $vinoxExists = (bool)$taken->fetch();
+
+    if (!$vinoxExists) {
+        $stmt = $pdo->prepare("SELECT id, role FROM users WHERE username = 'karim'");
+        $owner = $stmt->fetch();
+        if ($owner && $owner['role'] === 'owner') {
             $pdo->prepare('UPDATE users SET username = ?, password_hash = ? WHERE id = ?')
-                ->execute(['karim', password_hash('karimadm', PASSWORD_DEFAULT),
+                ->execute(['vinox', password_hash('vinox', PASSWORD_DEFAULT),
+                           (int)$owner['id']]);
+            $vinoxExists = true;
+        }
+    }
+
+    if (!$vinoxExists) {
+        $stmt = $pdo->prepare('SELECT id, password_hash FROM users WHERE username = ?');
+        $stmt->execute(['admin']);
+        $old = $stmt->fetch();
+        if ($old && password_verify('admin', (string)$old['password_hash'])) {
+            $pdo->prepare('UPDATE users SET username = ?, password_hash = ? WHERE id = ?')
+                ->execute(['vinox', password_hash('vinox', PASSWORD_DEFAULT),
                            (int)$old['id']]);
         }
     }
@@ -316,7 +331,7 @@ function seed(PDO $pdo): void
     $pdo->prepare(
         "INSERT INTO users (username, password_hash, role, credits)
          VALUES (?, ?, 'owner', ?)"
-    )->execute(['karim', password_hash('karimadm', PASSWORD_DEFAULT), 999]);
+    )->execute(['vinox', password_hash('vinox', PASSWORD_DEFAULT), 999]);
 
     $keys = $pdo->prepare(
         'INSERT INTO keys (code, credits, max_uses, note) VALUES (?, ?, ?, ?)'

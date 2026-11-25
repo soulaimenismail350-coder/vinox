@@ -118,12 +118,12 @@ function send_security_headers(): void
     header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
     header(
         "Content-Security-Policy: default-src 'self'; "
-        . "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; "
+        . "script-src 'self' 'unsafe-inline'; "
         . "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         . "font-src 'self' https://fonts.gstatic.com; "
         . "img-src 'self' data:; "
-        . "connect-src 'self' https://challenges.cloudflare.com; "
-        . "frame-src https://challenges.cloudflare.com; "
+        . "connect-src 'self'; "
+        . "frame-src 'self'; "
         . "form-action 'self'; "
         . "base-uri 'none'; "
         . "frame-ancestors 'none'"
@@ -945,13 +945,13 @@ const LOGIN_MAX_DELAY = 30;
 
 /* Real client address.
  *
- * Behind Cloudflare, REMOTE_ADDR is Cloudflare. nginx is configured by
- * deploy.sh with set_real_ip_from over the published Cloudflare ranges plus
- * real_ip_header CF-Connecting-IP, so REMOTE_ADDR is already correct by the
- * time PHP sees it - which is the only safe way to do this. The header is
- * deliberately NOT read here: a client can send CF-Connecting-IP itself, and
- * trusting it would hand every attacker a fresh identity per request and make
- * the sign-in throttle useless. */
+ * REMOTE_ADDR is what the web server actually saw, and that is what the
+ * sign-in throttle is keyed on. A CF-Connecting-IP header is deliberately NOT
+ * read here: anyone who can reach the origin directly can send one of those
+ * themselves, which would give every attacker a fresh identity per request.
+ * If the site is ever put behind Cloudflare again, restore the visitor address
+ * at the proxy (mod_remoteip / set_real_ip_from over Cloudflare's published
+ * ranges) so PHP sees the real IP - not by trusting a header in this file. */
 function client_ip(): string
 {
     return (string)($_SERVER['REMOTE_ADDR'] ?? 'cli');
@@ -998,10 +998,14 @@ function login_delay(string $username): int
 
 /* --- Cloudflare Turnstile ---------------------------------------------------
  *
- * Verified server side, always. The widget on the page proves nothing on its
- * own: the token has to be exchanged with Cloudflare, and a token is valid
- * once. Failing closed matters here - a network error must not become a way
- * to skip the check by cutting the connection at the right moment.
+ * Disabled in this deployment: the keys in cfg.php are empty, so the three
+ * call sites below are inert (no script, no widget, no token required).
+ *
+ * If it is ever re-enabled, verify server side, always. The widget on the page
+ * proves nothing on its own: the token has to be exchanged with Cloudflare,
+ * and a token is valid once. Failing closed matters here - a network error must
+ * not become a way to skip the check by cutting the connection at the right
+ * moment.
  */
 function turnstile_widget(): string
 {
@@ -1033,10 +1037,11 @@ function turnstile_check(): ?string
         return 'Complete the challenge and try again.';
     }
 
+    /* remoteip is optional. Leaving it out avoids a mismatch when the app sits
+       behind a proxy and PHP only sees the proxy's address. */
     $post = http_build_query([
         'secret'   => TURNSTILE_SECRET,
         'response' => $token,
-        'remoteip' => client_ip(),
     ]);
 
     $body = false;
