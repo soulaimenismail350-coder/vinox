@@ -2,7 +2,7 @@
 declare(strict_types=1);
 const SITE_NAME = 'FREE FIRE LEVEL';
 const SITE_ICON = '/fflevelpro.png';
-const SITE_URL = 'https://ffgoatpro.online';
+const SITE_URL = 'https://vinox-production.up.railway.app';
 const CLEAN_URLS = true;
 /* Cloudflare Turnstile is switched off.
  *
