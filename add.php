@@ -43,18 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    /* Checked before anything else, and before the credentials are looked at
-       at all. This form is the one place on the site where a stranger's game
-       login is handed over, and a script that can post to it can farm stolen
-       credentials through the panel - trying each one and reading the state
-       back off the process page to learn which are live. A challenge does not
-       stop somebody doing that by hand; it stops it being done ten thousand
-       times overnight, which is the difference that matters. */
-    $challenge = turnstile_check();
-
-    if ($challenge !== null) {
-        $error = $challenge;
-    } elseif ((int)$user['credits'] < PROCESS_COST) {
+    if ((int)$user['credits'] < PROCESS_COST) {
         $error = 'Not enough credits. Redeem a key first.';
     } elseif ($missing) {
         $error = $type === 'guest'
@@ -224,10 +213,6 @@ app_head('Add process', 'add', ['Processes' => 'dashboard.php']);
             </p>
           </div>
         </div>
-
-        <?php if (turnstile_enabled()): ?>
-          <div class="field" style="margin:0 0 18px"><?= turnstile_widget() ?></div>
-        <?php endif; ?>
 
         <div class="btns" style="margin-top:0">
           <button class="btn blue" type="submit"

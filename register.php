@@ -14,12 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $again = (string)($_POST['confirm'] ?? '');
     $code = strtoupper(trim((string)($_POST['code'] ?? '')));
 
-    /* Checked first. Signup is the door a bot walks through to make a hundred
-       accounts; there is no point validating a username it never typed. */
-    $challenge = turnstile_check();
-    if ($challenge !== null) {
-        $error = $challenge;
-    } elseif (!preg_match('/^[A-Za-z0-9_.-]{3,24}$/', $name)) {
+    if (!preg_match('/^[A-Za-z0-9_.-]{3,24}$/', $name)) {
         $error = 'Username must be 3-24 characters: letters, numbers, . _ -';
     } elseif (!valid_password($pass)) {
         $error = PASSWORD_RULE;
@@ -145,9 +140,6 @@ auth_head('Create account');
           from.
         </p>
       </div>
-      <?php if (turnstile_enabled()): ?>
-        <div class="field" style="margin-top:14px"><?= turnstile_widget() ?></div>
-      <?php endif; ?>
       <button class="btn primary block" type="submit" style="margin-top:18px">
         Create account
       </button>

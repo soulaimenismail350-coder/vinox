@@ -23,14 +23,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         sleep(min(5, $wait));
     }
 
-    /* The challenge is checked before the password, so a script cannot use
-       this form to test credentials at all - not even slowly. */
-    $challenge = turnstile_check();
-    if ($challenge !== null) {
-        login_note_failure($name);
-        $error = $challenge;
-    } else {
-
     $stmt = db()->prepare('SELECT * FROM users WHERE username = ?');
     $stmt->execute([$name]);
     $user = $stmt->fetch();
@@ -52,7 +44,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /* One message for both halves on purpose: naming which was wrong tells
            anyone probing the form whether a username exists. */
         $error = 'Wrong username or password.';
-    }
     }
 }
 
@@ -80,9 +71,6 @@ auth_head('Sign in');
         <input id="p" name="password" type="password" required
                autocomplete="current-password">
       </div>
-      <?php if (turnstile_enabled()): ?>
-        <div class="field" style="margin-top:14px"><?= turnstile_widget() ?></div>
-      <?php endif; ?>
       <button class="btn primary block" type="submit" style="margin-top:18px">Sign in</button>
     </form>
   </div>

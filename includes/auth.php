@@ -946,12 +946,9 @@ const LOGIN_MAX_DELAY = 30;
 /* Real client address.
  *
  * REMOTE_ADDR is what the web server actually saw, and that is what the
- * sign-in throttle is keyed on. A CF-Connecting-IP header is deliberately NOT
- * read here: anyone who can reach the origin directly can send one of those
- * themselves, which would give every attacker a fresh identity per request.
- * If the site is ever put behind Cloudflare again, restore the visitor address
- * at the proxy (mod_remoteip / set_real_ip_from over Cloudflare's published
- * ranges) so PHP sees the real IP - not by trusting a header in this file. */
+ * sign-in throttle is keyed on. Proxy-supplied identity headers are not read
+ * here: anyone who can reach the origin directly can send one of those
+ * themselves, which would give every attacker a fresh identity per request. */
 function client_ip(): string
 {
     return (string)($_SERVER['REMOTE_ADDR'] ?? 'cli');
@@ -996,87 +993,4 @@ function login_delay(string $username): int
     return (int)min(LOGIN_MAX_DELAY, 2 ** min(10, $tries - LOGIN_FREE_TRIES + 1));
 }
 
-/* --- Cloudflare Turnstile ---------------------------------------------------
- *
- * Disabled in this deployment: the keys in cfg.php are empty, so the three
- * call sites below are inert (no script, no widget, no token required).
- *
- * If it is ever re-enabled, verify server side, always. The widget on the page
- * proves nothing on its own: the token has to be exchanged with Cloudflare,
- * and a token is valid once. Failing closed matters here - a network error must
- * not become a way to skip the check by cutting the connection at the right
- * moment.
- */
-function turnstile_widget(): string
-{
-    if (!turnstile_enabled()) {
-        return '';
-    }
-    return '<div class="cf-turnstile" data-sitekey="'
-        . e(TURNSTILE_SITE_KEY) . '" data-theme="auto"></div>';
-}
 
-function turnstile_script(): string
-{
-    if (!turnstile_enabled()) {
-        return '';
-    }
-    return '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js"'
-        . ' async defer></script>';
-}
-
-/* Null when the challenge passed or is switched off, otherwise the sentence to
-   show the user. */
-function turnstile_check(): ?string
-{
-    if (!turnstile_enabled()) {
-        return null;
-    }
-    $token = (string)($_POST['cf-turnstile-response'] ?? '');
-    if ($token === '') {
-        return 'Complete the challenge and try again.';
-    }
-
-    /* remoteip is optional. Leaving it out avoids a mismatch when the app sits
-       behind a proxy and PHP only sees the proxy's address. */
-    $post = http_build_query([
-        'secret'   => TURNSTILE_SECRET,
-        'response' => $token,
-    ]);
-
-    $body = false;
-    if (function_exists('curl_init')) {
-        $ch = curl_init('https://challenges.cloudflare.com/turnstile/v0/siteverify');
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $post,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 8,
-            CURLOPT_CONNECTTIMEOUT => 4,
-        ]);
-        $body = curl_exec($ch);
-        curl_close($ch);
-    } else {
-        $ctx = stream_context_create(['http' => [
-            'method'        => 'POST',
-            'header'        => "Content-Type: application/x-www-form-urlencoded\r\n",
-            'content'       => $post,
-            'timeout'       => 8,
-            'ignore_errors' => true,
-        ]]);
-        $body = @file_get_contents(
-            'https://challenges.cloudflare.com/turnstile/v0/siteverify', false, $ctx);
-    }
-
-    if ($body === false) {
-        error_log('gglp: turnstile verification unreachable');
-        return 'The challenge could not be verified. Try again in a moment.';
-    }
-    $data = json_decode((string)$body, true);
-    if (!is_array($data) || empty($data['success'])) {
-        $codes = is_array($data) ? implode(',', (array)($data['error-codes'] ?? [])) : 'bad reply';
-        error_log('gglp: turnstile rejected (' . $codes . ')');
-        return 'The challenge did not pass. Try again.';
-    }
-    return null;
-}

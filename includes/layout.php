@@ -72,7 +72,6 @@ function doc_close(): void
          credential - form.submit() fires no submit event, so a listener alone
          would be walked straight past. */ ?>
 <script src="<?= e(asset('assets/seal.js')) ?>"></script>
-<?= turnstile_script() ?>
 </body>
 </html><?php
     if (ob_get_level() > 0) {
